@@ -7,7 +7,7 @@
     <ProjectGuid>{262C092A-A65F-4D44-8A39-32C2F77CED26}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>Exigo_ClientReporting</RootNamespace>
+    <RootNamespace>Exigo.ClientReporting</RootNamespace>
     <AssemblyName>Exigo-ClientReporting</AssemblyName>
     <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
@@ -40,8 +40,21 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Class1.cs" />
+    <Compile Include="Commit\CustomEntityBulkCopyReader.cs" />
+    <Compile Include="Commit\CustomEntityWriter.cs" />
+    <Compile Include="Commit\SqlBulkCopyReader.cs" />
+    <Compile Include="Configuration\Configuration.cs" />
+    <Compile Include="Configuration\VolumeConfiguration.cs" />
+    <Compile Include="DataObjects\Customer.cs" />
+    <Compile Include="DataObjects\Entities.cs" />
+    <Compile Include="DataObjects\IReadOnlyKeyedList.cs" />
+    <Compile Include="DataObjects\KeyedEntityList.cs" />
+    <Compile Include="DataObjects\Order.cs" />
+    <Compile Include="ReportSource.cs" />
+    <Compile Include="DataObjects\Tree.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="DataObjects\Volumes.cs" />
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
