@@ -47,11 +47,10 @@ namespace Exigo.ClientReporting
 
         //write code to create table flip switch if it doesn't already exist
 
-        byte GetCurrentPeriodWriteIndex(SqlConnection conn, int companyID, string tableName)
+        byte GetCurrentPeriodWriteIndex(SqlConnection conn,  string tableName)
         {
             //--> Get the current live id
-            SqlCommand cmd = new SqlCommand($"Select LiveID From {_schemaName}.TableFlipSwitch Where CompanyID=@CompanyID and TableName=@TableName", conn);
-            cmd.Parameters.Add("@CompanyID", SqlDbType.Int).Value = companyID;
+            SqlCommand cmd = new SqlCommand($"Select LiveID From {_schemaName}.TableFlipSwitch Where TableName=@TableName", conn);
             cmd.Parameters.Add("@TableName", SqlDbType.VarChar, 200).Value = tableName;
             var o = cmd.ExecuteScalar();
             if (o == null) throw new Exception(tableName + " not setup properly for snapshots");
@@ -59,12 +58,12 @@ namespace Exigo.ClientReporting
 
         }
 
-        void FlipPeriodViews(SqlConnection conn, int companyID, string tableName)
+        public void FlipPeriodViews(SqlConnection conn,  string tableName)
         {
-            byte current = GetCurrentPeriodWriteIndex(conn, companyID, tableName);
+            byte current = GetCurrentPeriodWriteIndex(conn, tableName);
 
             string readTable = _schemaName + "." + tableName + "Table";
-            string writeTable = tableName + "." + "Table";
+            string writeTable = _schemaName +  "." + tableName  + "Table";
             byte newCurrent = 1;
             if (current == 1)
             {
@@ -80,15 +79,14 @@ namespace Exigo.ClientReporting
             }
 
             //--> Flip the views
-            var cmd = new SqlCommand(@"
-            alter view " + tableName + @"
+            var cmd = new SqlCommand($@"
+            alter view {_schemaName}.{tableName}
             as
             Select * from " + readTable, conn);
             cmd.ExecuteNonQuery();
 
             //--> Update the switch 
-            cmd = new SqlCommand($@"Update {_schemaName}.TableFlipSwitch set LiveID=@NewCurrentID Where CompanyID=@CompanyID and TableName=@TableName", conn);
-            cmd.Parameters.Add("@CompanyID", SqlDbType.Int).Value = companyID;
+            cmd = new SqlCommand($@"Update {_schemaName}.TableFlipSwitch set LiveID=@NewCurrentID Where TableName=@TableName", conn);
             cmd.Parameters.Add("@TableName", SqlDbType.VarChar, 200).Value = tableName;
             cmd.Parameters.Add("@NewCurrentID", SqlDbType.TinyInt).Value = newCurrent;
             cmd.ExecuteNonQuery();
@@ -108,7 +106,8 @@ namespace Exigo.ClientReporting
                 //  b) truncate the write only table
 
                 EnsurePeriodTablePairExists(conn, o, companyID, tableName, keyName);
-                TruncateCurrentPeriodWriteTable(conn, tableName);
+                //TruncateCurrentPeriodWriteTable(conn, tableName);
+                DeleteCurrentPeriodWriteTable(conn, tableName, periodTy, periodID);
             }
 
             ////this is run each time
@@ -120,13 +119,25 @@ namespace Exigo.ClientReporting
             //DoBulk((SqlBulkCopyReader)invoker(this, companyID, periodTy, periodID, listWrapper.List,
             //    GetTableFieldDefinitions(conn, tableName)),
             //    GetCurrentPeriodWriteTable(conn, companyID, tableName), conn);
+            
 
-            string tableNameWithSchema = _schemaName + "." + tableName;
+            string tableNameWithSchema = _schemaName + "." + GetCurrentPeriodWriteTable(conn, tableName);
             CustomEntityForPeriodBulkCopyReader<T> rd = new CustomEntityForPeriodBulkCopyReader<T>(periodTy, periodID, o as ICollection<T>, GetTableFieldDefinitions(conn, tableNameWithSchema));
 
             DoBulk((SqlBulkCopyReader)rd, tableNameWithSchema, conn);
 
             //the views will be flipped in the CycleFinished method call
+            
+        }
+
+        public void FinalizeTable(string tableName)
+        {
+            //not currently used
+            using (var conn = new SqlConnection(_connectionString))
+            {
+                conn.Open();
+                FlipPeriodViews(conn, tableName);
+            }   
         }
 
         internal void DoBulk(SqlBulkCopyReader rd, string tableName, SqlConnection conn)
@@ -160,6 +171,15 @@ namespace Exigo.ClientReporting
             cmd.ExecuteNonQuery();
         }
 
+        void DeleteCurrentPeriodWriteTable(SqlConnection conn, string tableName, int PeriodTypeID, int PeriodID)
+        {
+            string currentWriteTable = GetCurrentPeriodWriteTable(conn, tableName);
+
+            var cmd = new SqlCommand("Delete " + _schemaName + "." + currentWriteTable + $" where periodtypeid = {PeriodTypeID} and periodID={PeriodID}", conn);
+            cmd.CommandTimeout = 1200; // mins
+            cmd.ExecuteNonQuery();
+        }
+
         private string GetCurrentPeriodWriteTable(SqlConnection conn, string tableName)
         {
             byte current = GetCurrentPeriodWriteIndex(conn,  tableName);
@@ -167,16 +187,7 @@ namespace Exigo.ClientReporting
             return currentWriteTable;
         }
 
-        byte GetCurrentPeriodWriteIndex(SqlConnection conn, string tableName)
-        {
-            //--> Get the current live id
-            SqlCommand cmd = new SqlCommand($@"Select LiveID From {_schemaName}.TableFlipSwitch Where TableName=@TableName", conn);
-            cmd.Parameters.Add("@TableName", SqlDbType.VarChar, 200).Value = tableName;
-            var o = cmd.ExecuteScalar();
-            if (o == null) throw new Exception(tableName + " not setup properly ");
-            return (byte)cmd.ExecuteScalar();
 
-        }
 
         //private void EnsurePeriodTablePairExists(SqlConnection conn, EntityListWrapper listWrapper, int companyID, string tableName, string keyName)
         private void EnsurePeriodTablePairExists(SqlConnection conn, object obj, int companyID, string tableName, string keyName)
@@ -284,7 +295,7 @@ namespace Exigo.ClientReporting
                 (");
 
             //sb.Append("CompanyID int not null, PeriodTy int not null, PeriodID int not null, ");
-            sb.Append("PeriodTy int not null, PeriodID int not null, ");
+            sb.Append("PeriodTypeID int not null, PeriodID int not null, ");
 
             for (int i = 0; i < props.Length; i++)
             {
@@ -317,7 +328,7 @@ namespace Exigo.ClientReporting
                 )
                 create clustered index IX_{0} on {1}.{0} 
                 (
-                    PeriodTy, PeriodID " + keyName + @"
+                    PeriodTypeID, PeriodID " + keyName + @"
                 )
                 WITH( STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON)
             ", tableName, _schemaName);

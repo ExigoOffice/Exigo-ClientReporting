@@ -22,11 +22,11 @@ namespace Exigo.ClientReporting
         public Node EnrollerNode { get; set; }
         public Node BinaryNode { get; set; }
 
-        public bool IsInUnilevelTree { get { return (UnilevelNode == null); } }
-        public bool IsInEnrollerTree { get { return (EnrollerNode == null); } }
-        public bool IsInBinaryTree { get { return (BinaryNode == null); } }
+        public bool IsInUnilevelTree { get { return (UnilevelNode != null); } }
+        public bool IsInEnrollerTree { get { return (EnrollerNode != null); } }
+        public bool IsInBinaryTree { get { return (BinaryNode != null); } }
 
         public bool IsActive { get; internal set; }
-        public Volume Volume { get; internal set; }
+        public Volume Volume  { get; internal set; }
 }
 }

@@ -12,6 +12,12 @@ namespace Exigo.ClientReporting
         {
             _Volumes = new Dictionary<int, decimal>(bucketCount);
         }
+
+        public Volume() //new volume record without bucket cound will have its values default to 0
+        {
+
+        }
+
         private Dictionary<int, decimal> _Volumes;
 
         public decimal this[int volumeID]
@@ -22,7 +28,7 @@ namespace Exigo.ClientReporting
             }
             get
             {
-                return _Volumes[volumeID];
+                return _Volumes?[volumeID] ?? 0M;
             }
         }
 

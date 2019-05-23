@@ -38,6 +38,11 @@ namespace Exigo.ClientReporting
         public DateTime Modified { get; set; }
     }
 
+    public class PreviousVolumeList : Dictionary<int, Volume>
+    {
+        public DateTime Modified { get; set; }
+    }
+
     public class ReportSource
     {
         public ReportSource(string ConnectionString) {
@@ -51,6 +56,7 @@ namespace Exigo.ClientReporting
         
         public CustomerList Customers { get; private set; }
         public VolumeList Volumes { get; private set; }
+        public VolumeList PreviousVolumes { get; private set; }
         public OrderList Orders { get; private set; }
 
         public ReportingConfiguration Configuration { get; set; }
@@ -67,6 +73,7 @@ namespace Exigo.ClientReporting
             Customers = new CustomerList() { Modified = new DateTime(2000, 1, 1) };
             Orders = new OrderList() { Modified = new DateTime(2000, 1, 1) };
             Volumes = new VolumeList();
+            PreviousVolumes = new VolumeList();
 
         }
 
@@ -77,9 +84,15 @@ namespace Exigo.ClientReporting
             UpdateUniLevelTree(UnilevelTree);
             UpdateBinaryTree(BinaryTree);
             UpdateCustomers(Customers);
-            LinkCustomersToObjects();
-            UpdateVolumes(Volumes, PeriodTypeID, PeriodID);
+            UpdateVolumes(Volumes, PeriodTypeID, PeriodID, true);
             UpdateOrders(Orders, MinOrderDate, maxOrderDate, null, null);
+
+            LinkCustomersToObjects();
+        }
+
+        public void LoadPreviousVolumes()
+        {
+            UpdateVolumes(PreviousVolumes, PeriodTypeID, PeriodID - 1, false);
         }
 
         public void Reload()
@@ -787,7 +800,7 @@ namespace Exigo.ClientReporting
 
         }
 
-        public bool UpdateVolumes(VolumeList volumes, int periodTy, int periodID)
+        public bool UpdateVolumes(VolumeList volumes, int periodTy, int periodID, bool IsCurrent)
         {
             //need to decide if we're going to do partial loads/deltas
 
@@ -809,7 +822,7 @@ namespace Exigo.ClientReporting
 
                 volumes.Clear();
 
-                SqlCommand cmd = GetVolumeCommand(conn, config, PeriodTypeID, PeriodID);
+                SqlCommand cmd = GetVolumeCommand(conn, config, periodTy, periodID);
 
                 rd = cmd.ExecuteReader();
 
@@ -820,11 +833,11 @@ namespace Exigo.ClientReporting
                     PopulateVolumeFromReader(rd, sv, config);
 
                     Customer c = null;
-                    if (Customers.TryGetValue(sv.CustomerID, out c))
+                    if (Customers.TryGetValue(sv.CustomerID, out c) && IsCurrent)
                     {
                         c.Volume = sv;
-                        volumes.Add(rd.GetInt32(0), sv);
                     }
+                    volumes.Add(rd.GetInt32(0), sv);
                 }
                 EndTrace("UpdateVolumes", $"PeriodVolume Refresh PeriodTy {periodTy}, PeriodID {periodID}");
 
@@ -846,7 +859,8 @@ namespace Exigo.ClientReporting
             int cnt = 3;
             foreach (var f in config.VolumeFields)
             {
-                sv[cnt-2] = rd.GetDecimal(cnt++);
+                //sv[cnt-2] = rd.GetDecimal(cnt++);
+                sv[f.VolumeID] = rd.GetDecimal(cnt++);
             }
         }
 
@@ -858,6 +872,10 @@ namespace Exigo.ClientReporting
                 cust.BinaryNode = null;
                 cust.EnrollerNode = null;
                 cust.UnilevelNode = null;
+
+                //since we're looping through customers we'll fix null volume records at the same time
+                if (cust.Volume == null)
+                    cust.Volume = new Volume();
             }
 
             Customer c;
